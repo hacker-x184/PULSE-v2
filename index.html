@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PULSE — Intelligent Project Management & Contribution Platform</title>
+    <meta name="description" content="PULSE: Manage projects, assign tasks, track progress, analyze team member contributions, identify project risks with transparent rules, and generate actionable reports." />
+    <meta property="og:title" content="PULSE — Intelligent Project Management & Contribution Platform" />
+    <meta property="og:description" content="PULSE: Manage projects, assign tasks, track progress, analyze team member contributions, identify project risks with transparent rules, and generate actionable reports." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('pulse_theme');
+          var theme = (saved === 'dark' || saved === 'light') ? saved : 'light';
+          if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+            document.documentElement.setAttribute('data-theme', 'dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.setAttribute('data-theme', 'light');
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

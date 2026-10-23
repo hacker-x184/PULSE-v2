@@ -1,0 +1,1227 @@
+# PULSE — Production-Quality Agentic AI, RAG, LangChain & LangGraph Implementation
+
+## 1. Your Role
+
+Act as a senior full-stack engineer, AI systems architect, security engineer, and QA engineer working directly inside the existing PULSE repository.
+
+Your task is to **inspect, implement, integrate, test, and verify** the complete AI system described below. Do not merely explain how to implement it, generate a roadmap, create mockups, or write example code that is not connected to the application.
+
+Work with the existing codebase. Understand its architecture before making changes. Reuse working functionality wherever possible, and avoid unnecessary rewrites.
+
+The final result must be a functioning, maintainable, secure implementation, not a demonstration or prototype.
+
+### Non-negotiable rules
+
+1. Do not blindly trust assumptions in this specification. Inspect the actual source code, dependencies, database schema, APIs, authentication flow, frontend routes, and tests first.
+2. Do not overwrite working features just to introduce a new architecture.
+3. Do not create duplicate services, duplicate API endpoints, duplicate database tables, or parallel implementations when an existing component can be extended safely.
+4. Do not use fake agents, simulated tools, mock RAG results, hardcoded answers, placeholder implementations, or fabricated GitHub evidence in production paths.
+5. Do not claim a feature is complete unless its backend, frontend integration where applicable, persistence, error handling, and tests are actually implemented.
+6. Do not silently swallow errors or return successful responses when an operation failed.
+7. Do not remove existing features, routes, data, or user workflows without a demonstrated technical necessity.
+8. If a requirement conflicts with the actual codebase, investigate it and choose the smallest safe solution. Document any unavoidable limitation.
+9. Never expose API keys, passwords, private project information, internal reasoning, or unauthorized team data.
+10. Keep the frontend clean and professional. Implement only the controls users actually need.
+
+---
+
+## 2. Existing Project: Inspect Before Editing
+
+The existing project has been reported to use:
+
+- React 19 and TypeScript
+- Vite 8
+- Tailwind CSS 4
+- Express 4 backend
+- sql.js with a persistent SQLite database file
+- An existing AI endpoint at `/api/ai/query`
+- Existing project, task, team, GitHub, contribution, risk, simulation, reporting, collaboration, and audit-log functionality
+- An existing large file at `src/ai/agenticBackend.ts` containing custom agent and retrieval-related implementations that may not be connected to the application
+- An existing AI integration that was reported to use Google Gemini
+- Existing tests and build scripts
+
+These details come from an earlier audit and may have changed. Verify all of them against the actual repository.
+
+### Required initial audit
+
+Before editing, inspect:
+
+- `package.json` and lockfile
+- Project directory structure
+- Frontend entry points, routing, state management, and API client
+- Express application initialization and middleware
+- Existing AI endpoint and AI service code
+- `src/ai/agenticBackend.ts` and all of its imports and callers
+- All database initialization, schema, migrations, and persistence logic
+- Authentication and authorization middleware
+- Project, task, team, member, contribution, risk, GitHub, report, and audit-log APIs
+- GitHub integration and its available data
+- Existing tests and test scripts
+- `.env.example` or equivalent environment configuration
+- Existing frontend design system and reusable components
+
+Determine which features are implemented, partially implemented, disconnected, simulated, or missing.
+
+Create a private implementation checklist based on this inspection. Then proceed with implementation. Do not stop after producing the checklist.
+
+Preserve all existing user data. Back up or migrate the database safely before applying schema changes. Never delete the current SQLite database as a shortcut.
+
+---
+
+## 3. Fixed Technology Decisions
+
+### LLM provider
+
+The only primary LLM provider for this implementation is Groq.
+
+Use this exact model identifier:
+
+`openai/gpt-oss-120b`
+
+Requirements:
+
+- Keep the model identifier configurable through environment variables, with `openai/gpt-oss-120b` as the default.
+- Use the actual Groq API through a maintained, compatible integration.
+- Prefer the official or maintained LangChain JavaScript integration for Groq, such as `@langchain/groq`, if compatible with the installed Node.js version and project architecture.
+- Use the installed package's actual documented API and current compatible versions.
+- Never silently replace Groq with Gemini, OpenAI, or another LLM.
+- Do not rename the model to a different model identifier.
+- Do not assume the model has access to the application database or GitHub unless application tools explicitly provide that access.
+- Never hardcode the Groq API key in source code or expose it to the browser.
+
+Expected configuration:
+
+`GROQ_API_KEY=...`
+
+`GROQ_MODEL=openai/gpt-oss-120b`
+
+`AI_PROVIDER=groq`
+
+Use actual configuration names consistently throughout the application and document them.
+
+### LangChain and LangGraph
+
+Use the real JavaScript/TypeScript ecosystem because the existing backend is JavaScript/TypeScript based.
+
+Use genuine compatible packages, including where appropriate:
+
+- `@langchain/core`
+- `@langchain/langgraph`
+- `@langchain/groq`
+- Appropriate maintained document loaders, text splitters, vector-store integrations, and embedding integrations
+
+Verify package compatibility before installation. Keep dependencies in the lockfile. Do not create custom classes and label them LangChain or LangGraph without using the real frameworks.
+
+Use LangChain for LLM integration, prompts, structured outputs, retrievers, tools, document processing, and related abstractions where appropriate.
+
+Use LangGraph for actual stateful workflows with defined state, nodes, conditional edges, persistence/checkpointing where appropriate, interruption for approval, and resumable execution.
+
+Do not introduce Python microservices or another backend framework unless the repository proves that they are necessary. The default architecture remains the existing Express backend.
+
+### Existing database
+
+Preserve the existing sql.js/SQLite persistence system unless inspection proves a specific incompatibility that cannot be resolved safely.
+
+If a new table or index is needed:
+
+- Add a versioned, repeatable migration.
+- Preserve all existing records.
+- Add suitable indexes and constraints.
+- Handle migration failures safely.
+- Make sure the application restarts without losing data.
+- Use transactions where supported by the existing database layer.
+- Follow the application's established persistence conventions.
+
+Do not introduce PostgreSQL, Redis, another database, or another infrastructure service merely for convenience.
+
+---
+
+## 4. Architecture Requirements
+
+Implement a clean, modular AI architecture. Follow existing repository conventions when they are reasonable.
+
+Use separate modules for responsibilities such as:
+
+- Groq model initialization and configuration
+- AI request orchestration
+- LangChain tools
+- LangGraph workflow definitions
+- Conversation and workflow state
+- Project-context retrieval
+- Document ingestion and parsing
+- Embedding generation and vector retrieval
+- GitHub evidence retrieval
+- Structured output validation
+- Permission and approval checks
+- Workflow execution history
+- Audit logging
+
+These are logical responsibilities, not mandatory filenames. Avoid creating excessive tiny files or unnecessary abstraction.
+
+The AI layer must call existing business services and database repositories instead of implementing competing versions of task management, risk scoring, contribution scoring, or project management.
+
+Reuse existing risk, contribution, and project-intelligence utilities where appropriate. Verify their inputs, outputs, and permissions before reuse.
+
+### Source of truth
+
+The existing database and authorized external integrations are the source of truth.
+
+- User profiles must come from authorized profile records.
+- Project details must come from actual project records.
+- Tasks and assignments must come from the database.
+- Contribution analysis must use available contribution records and verified GitHub evidence.
+- Risk analysis must use existing risk logic and actual project data.
+- Document-derived requirements must retain links to the original document and relevant text.
+- AI-generated suggestions must be clearly distinguished from saved facts.
+
+The LLM must not invent database records or pretend it has retrieved information that was never retrieved.
+
+---
+
+## 5. Authentication and Security Are Blockers
+
+An earlier audit identified potentially serious issues:
+
+- Plaintext password storage
+- Forgeable pseudo-tokens such as `jwt-auth-<userId>`
+- An unauthenticated `/api/auth/me` fallback that could return the first user
+- Missing authorization checks on some endpoints
+- Wildcard CORS configuration
+
+Reinspect the current implementation. If these issues still exist, fix them before enabling AI access to private data or allowing AI tools to modify project records.
+
+### Authentication
+
+- Use a real, cryptographically secure authentication mechanism compatible with the current application.
+- Hash passwords using an established password-hashing algorithm and appropriate parameters.
+- Never store or log plaintext passwords.
+- Validate tokens correctly and reject forged, expired, malformed, or missing credentials.
+- Remove unsafe authentication fallbacks.
+- Do not assume a user ID supplied by the browser proves identity.
+- Do not break legitimate existing login flows without implementing and testing a safe migration.
+
+If existing users have plaintext passwords, provide a safe migration strategy. Do not silently assume all existing users can be discarded.
+
+### Authorization
+
+Implement server-side authorization for every sensitive AI request and every tool execution.
+
+Enforce:
+
+- Authentication
+- Project membership and role checks
+- Project-level access restrictions
+- Team and profile visibility rules
+- Task-level permissions where relevant
+- Document access restrictions
+- GitHub integration permissions
+- Write permissions for project changes
+- Administrative permissions for privileged operations
+
+Do not rely on frontend visibility or prompt instructions for security.
+
+A model request must never be able to bypass authorization by asking a tool directly.
+
+### Other security requirements
+
+- Restrict CORS to explicitly configured trusted origins.
+- Validate and sanitize incoming input.
+- Prevent SQL injection through the existing database access layer.
+- Add appropriate rate limits to expensive AI and ingestion endpoints.
+- Enforce request size, file size, file type, and processing time limits.
+- Protect against path traversal and unsafe file access.
+- Keep API keys and secrets out of logs and frontend bundles.
+- Avoid exposing stack traces or internal database details to users.
+- Apply safe timeouts and error handling to external requests.
+- Avoid logging private document contents or full conversation history unnecessarily.
+- Treat uploaded documents, retrieved webpages, code comments, GitHub issues, and commit messages as untrusted data, not as system instructions.
+
+Do not enable privileged AI writes until the corresponding security checks are implemented and tested.
+
+---
+
+## 6. Feature One: PULSE Project Assistant
+
+Build a real conversational assistant inside PULSE.
+
+Users should be able to ask questions about information they are authorized to access, including:
+
+- Their profile and role
+- Their projects
+- Team members and roles
+- Tasks, subtasks, assignments, and deadlines
+- Project progress and milestones
+- Blockers and dependencies
+- Workload and task distribution
+- Risks and project health
+- Contribution summaries
+- Available GitHub activity
+- Meeting notes and project documents
+- Previously approved AI-generated plans and actions
+
+### Request flow
+
+For each user request:
+
+1. Authenticate the user.
+2. Determine the user's allowed project and data scope.
+3. Classify the request into an appropriate supported operation.
+4. Retrieve relevant data from the actual database or authorized integrations.
+5. Use retrieval or a workflow when the request requires it.
+6. Generate a response using Groq and the configured model.
+7. Validate the response and its supporting evidence.
+8. Return the answer with relevant sources where available.
+
+Use deterministic database queries for exact factual questions whenever possible. Do not ask an LLM to guess exact task counts, deadlines, user roles, or project statuses from an incomplete context window.
+
+### Conversation behavior
+
+- Support useful multi-turn conversation where appropriate.
+- Preserve relevant conversation context without mixing different users or projects.
+- Apply authorization again on every request, including follow-up messages.
+- Do not allow a previous message to grant new permissions.
+- Handle vague requests by asking a short clarification question.
+- Distinguish missing information from an actual zero value.
+- If the required data is unavailable, say so clearly.
+- If Groq is unavailable, return a useful error and preserve recoverable state where appropriate.
+- Never fabricate answers to hide provider failures.
+
+Keep the existing `/api/ai/query` contract compatible where practical. If a breaking change is genuinely necessary, update all callers and tests together.
+
+---
+
+## 7. Feature Two: Real RAG and Project Knowledge Retrieval
+
+Implement actual Retrieval-Augmented Generation, not keyword search presented as complete RAG.
+
+### Supported knowledge sources
+
+Index authorized information from relevant existing sources:
+
+- Project descriptions and requirements
+- Task descriptions and acceptance criteria
+- Meeting notes
+- Uploaded PDFs and supported document files
+- Relevant project documentation
+- GitHub pull-request descriptions and review comments where accessible
+- GitHub commit metadata and messages
+- Relevant source-code diffs where available and permitted
+- Other useful existing project records
+
+Only index sources that the current integration can actually retrieve. Never fabricate missing diffs, reviews, commits, or documents.
+
+### Document ingestion pipeline
+
+Implement a real pipeline:
+
+1. Validate the uploaded file and the user's permission to access the target project.
+2. Store the file safely or use the existing approved storage mechanism.
+3. Extract text with a real parser for the supported file type.
+4. Preserve document name, project ID, uploader, access scope, page number or section, and other available provenance.
+5. Split the extracted text into sensible chunks with appropriate overlap.
+6. Generate actual embeddings using a real embedding model or provider.
+7. Store the vectors and metadata in a persistent, usable vector store.
+8. Make the indexed chunks retrievable across server restarts.
+9. Track processing status and errors.
+10. Support retries and safe re-indexing.
+
+Groq is the required LLM provider. It does not mean that an embedding API is automatically available. Choose a real, compatible embedding implementation separately, preferably with a local option if feasible. Document any additional configuration or model download requirement.
+
+Do not use semantic hashing, random vectors, fake embeddings, or BM25 alone and call it a production vector-embedding pipeline.
+
+If embedding generation fails, mark ingestion as failed or incomplete and report the actual reason. Do not silently index unusable vectors.
+
+### Retrieval pipeline
+
+For a user question:
+
+1. Apply project, user, and document permissions before exposing retrieved content.
+2. Generate the query embedding.
+3. Retrieve semantically relevant chunks.
+4. Optionally combine semantic search with keyword search.
+5. Rank results by relevance.
+6. Apply deduplication and sensible context limits.
+7. Pass only relevant, authorized evidence to the LLM.
+8. Return a grounded answer with citations to the retrieved sources.
+
+Use real vector similarity calculations. Hybrid search is acceptable, but keyword ranking and vector similarity must remain clearly implemented as distinct retrieval methods.
+
+### Citation requirements
+
+Every retrieved document result should preserve enough metadata to identify its source.
+
+Where available, show:
+
+- Document title
+- Page number or section
+- Relevant snippet
+- Project reference
+- Source record or URL
+- Commit SHA or PR number for GitHub sources
+
+Citations must point to actual retrieved material. Do not invent page numbers, filenames, commit hashes, line ranges, URLs, or source titles.
+
+When evidence is insufficient, explicitly state that the answer could not be verified from the available sources.
+
+### Index management
+
+Implement appropriate handling for:
+
+- New documents
+- Updated documents
+- Deleted or revoked documents
+- Changed GitHub data
+- Duplicate ingestion requests
+- Failed jobs and retries
+- Stale index records
+- Project access changes
+
+A user who loses access to a document or project must not continue retrieving its private indexed content.
+
+---
+
+## 8. Feature Three: GitHub Contribution Investigator
+
+Implement a specialized investigation workflow for questions such as:
+
+- Who contributed to this feature?
+- Who changed this file?
+- What changed in this pull request?
+- Which commits are related to this task?
+- What evidence supports a contribution summary?
+- Which work remains unverified?
+- How do recorded tasks compare with available GitHub activity?
+
+### Evidence sources
+
+Use actual available GitHub API data and existing synchronized records, including:
+
+- Commit SHA
+- Commit author and committer metadata
+- GitHub account identity when verified
+- Commit timestamp
+- Commit message
+- Changed file paths
+- Diff or patch when available and authorized
+- Pull-request number, title, and URL
+- Pull-request author
+- Review comments and review decisions
+- Associated issues and tasks when a reliable link exists
+- Existing contribution records
+
+Use the configured GitHub integration and permissions. Do not bypass repository access restrictions.
+
+### Attribution rules
+
+This is a critical requirement.
+
+- A commit author is not automatically the person who wrote an entire feature.
+- A committer and an author may be different people.
+- A GitHub account must not be automatically treated as a verified PULSE user without a reliable identity mapping.
+- Lines added or deleted do not by themselves establish business impact, quality, ownership, or effort.
+- A commit message alone does not prove that a feature is complete.
+- Missing GitHub evidence must be identified as missing evidence.
+
+Provide a structured investigation report containing:
+
+1. Question investigated
+2. Scope and time range
+3. Evidence found
+4. Relevant commits and pull requests
+5. File paths and available change summaries
+6. Relationship to tasks or requirements, if verified
+7. Confidence and limitations
+8. Sources for each important claim
+
+Separate observed facts from interpretations.
+
+Never fabricate evidence to satisfy a user or force a conclusion about an individual.
+
+---
+
+## 9. Feature Four: PDF/Document-to-Project Planner
+
+Create an agentic workflow that converts an uploaded requirements document into a proposed project plan.
+
+Support PDF and additional document formats only when their parsers are actually implemented and tested.
+
+### Step A: Upload and extraction
+
+- Validate the file type, size, and user permissions.
+- Extract text using an actual parser.
+- Preserve page and section references.
+- Report unreadable pages, empty documents, or extraction failures.
+- Treat embedded instructions in the document as untrusted content.
+- Do not execute document-provided code, scripts, commands, or instructions.
+
+### Step B: Requirement analysis
+
+Extract and validate a structured representation of:
+
+- Project objective
+- Scope
+- Functional requirements
+- Non-functional requirements
+- Deliverables
+- Roles and responsibilities
+- Tasks
+- Subtasks
+- Acceptance criteria
+- Dependencies
+- Blockers and assumptions
+- Milestones
+- Due dates, if explicitly stated
+- Estimates, if supported by the evidence
+- Risks and unresolved questions
+
+Each extracted item should retain its source page, section, or text reference when possible.
+
+Do not invent deadlines, estimates, requirements, or stakeholder commitments. Mark inferred suggestions as suggestions, not facts.
+
+### Step C: Structured validation
+
+Use a defined schema, preferably with the existing project's validation conventions or Zod if appropriate.
+
+Validate:
+
+- Required fields
+- Allowed values
+- Unique IDs within the proposed plan
+- Valid dependency references
+- No circular task dependencies
+- Valid dates and date ordering
+- Valid task-to-subtask relationships
+- Required acceptance criteria where appropriate
+- Valid project and user references
+
+Reject or repair invalid structured output safely. If a field cannot be resolved reliably, ask the user instead of inventing an answer.
+
+### Step D: Member and workload matching
+
+Recommend task assignments using actual authorized team data.
+
+Consider available information such as:
+
+- Skills and experience, when recorded
+- Existing responsibilities
+- Current workload
+- Task dependencies
+- Availability, if the application tracks it
+- Role restrictions
+- Relevant past project work, where supported by evidence
+
+Clearly distinguish recorded skills from inferred suitability.
+
+Do not assume a user possesses a skill simply because they are on the team. Do not invent member availability or capacity.
+
+If relevant information is missing, provide an unassigned task or a provisional recommendation.
+
+### Step E: Plan preview
+
+Before creating or modifying any project records, display a clear proposed plan.
+
+The preview should include:
+
+- Project summary
+- Proposed tasks and subtasks
+- Acceptance criteria
+- Dependencies
+- Proposed milestones
+- Suggested assignees
+- Estimates and their basis, if available
+- Unresolved questions
+- Source references
+- Items that require confirmation
+
+Allow the user to edit the plan before approval.
+
+### Step F: Explicit approval
+
+No project write operation may happen merely because the document was uploaded or analyzed.
+
+Require explicit approval from an authorized user before creating tasks, subtasks, assignments, milestones, or other records.
+
+The approval must be tied to the exact proposed plan version. If the plan changes after review, require approval again.
+
+### Step G: Safe execution
+
+After approval:
+
+- Revalidate permissions and project state.
+- Validate all referenced members, projects, tasks, and dependencies.
+- Check for duplicate task creation.
+- Create records through the existing business services.
+- Use transactions or safe compensation logic for multi-record operations.
+- Record created IDs and operation results.
+- Record the approval and audit event.
+- Report partial failures clearly.
+- Support safe retry without duplicating successfully created records.
+
+Do not claim that tasks were created unless the database confirms they exist.
+
+### Step H: Verification
+
+Read the saved records back from the database and compare them with the approved plan.
+
+Report:
+
+- Successfully created records
+- Failed records
+- Any differences
+- Any remaining manual steps
+
+A workflow is not complete merely because the LLM returned valid JSON.
+
+---
+
+## 10. Feature Five: Real Agentic AI with LangGraph
+
+Implement actual graph-based workflows. Do not create one giant prompt and label it an agent.
+
+Use explicit workflow state, typed inputs and outputs, graph nodes, conditional transitions, tool calls, error states, and appropriate persistence.
+
+### Required workflows
+
+#### A. Project Analyst
+
+Purpose: Answer detailed project questions and generate evidence-backed analysis.
+
+Flow:
+
+1. Authenticate and authorize the user.
+2. Identify the target project and question.
+3. Retrieve relevant database records.
+4. Retrieve supporting RAG and GitHub evidence when needed.
+5. Analyze progress, blockers, risks, dependencies, and workload.
+6. Validate the answer against retrieved facts.
+7. Return a concise report with evidence and limitations.
+
+#### B. Project Recovery Planner
+
+Purpose: Diagnose a project that is behind schedule or has serious blockers.
+
+Flow:
+
+1. Retrieve current project status.
+2. Retrieve tasks, milestones, dependencies, risks, and workloads.
+3. Identify overdue tasks and critical blockers using actual records.
+4. Reuse existing risk and project-intelligence logic where appropriate.
+5. Generate prioritized recovery recommendations.
+6. Estimate consequences only when the available data supports them.
+7. Show a proposed recovery plan.
+8. Require approval before changing assignments, deadlines, or task statuses.
+9. Execute approved changes through existing services.
+10. Verify saved changes and log the actions.
+
+#### C. Contribution Investigator
+
+Purpose: Investigate contribution questions using the GitHub evidence rules in Section 8.
+
+The workflow must gather evidence before drawing conclusions and return citations with uncertainty and limitations.
+
+#### D. Meeting-to-Tasks
+
+Purpose: Convert meeting notes into actionable tasks.
+
+Flow:
+
+1. Retrieve authorized meeting notes or accept user-provided notes.
+2. Extract decisions, action items, owners, dates, and dependencies.
+3. Distinguish explicit commitments from inferred suggestions.
+4. Validate the extracted structure.
+5. Identify ambiguous owners or deadlines.
+6. Present a proposed task list.
+7. Require approval before creating records.
+8. Create tasks through existing services.
+9. Verify the saved records and record an audit event.
+
+#### E. Document-to-Project Planner
+
+Implement the complete workflow described in Section 9.
+
+### Workflow state
+
+Define a clear, validated state structure for each workflow. Include the minimum necessary fields for:
+
+- Workflow ID
+- Workflow type
+- Initiating user ID
+- Authorized project scope
+- Current execution stage
+- Input references
+- Retrieved evidence references
+- Proposed actions
+- Approval state
+- Plan version
+- Executed operation IDs
+- Error and retry state
+- Final result
+
+Do not place unrestricted database objects, secrets, or unnecessary private information in checkpoint state.
+
+### Persistence and resumption
+
+Use real LangGraph checkpointing compatible with the existing environment.
+
+Choose a persistent checkpoint strategy that works with the current application and survives server restarts. If a custom SQLite-backed checkpoint adapter is necessary, implement and test its required interface rather than pretending ordinary JSON storage is a LangGraph checkpointer.
+
+Support resuming interrupted approval workflows without repeating already completed side effects.
+
+Ensure each workflow belongs to the correct user and project. Prevent cross-user workflow access.
+
+### Approval and interruption
+
+Use LangGraph's supported interrupt/resume mechanism or another documented mechanism appropriate to the installed version.
+
+The user must be able to:
+
+- View a pending plan
+- Approve it
+- Reject it
+- Request edits
+- Resume a pending workflow
+- See whether it completed or failed
+
+Validate authorization again at resume time. A pending workflow must not preserve permissions that the user no longer has.
+
+### Reliability
+
+Implement:
+
+- Bounded retries for transient failures
+- Timeouts for external services
+- Clear error states
+- Idempotent side effects
+- Maximum workflow execution limits
+- Safe cancellation where practical
+- Persistence of workflow progress
+- Traceable execution steps
+- Appropriate cleanup and recovery
+
+Never allow an uncontrolled loop of agent tool calls.
+
+---
+
+## 11. Tool Design and Permissions
+
+Create real LangChain-compatible tools backed by existing application services.
+
+Possible tool capabilities include:
+
+- Search authorized project records
+- Retrieve tasks and milestones
+- Retrieve project members and recorded skills
+- Read contribution and risk summaries
+- Search the project knowledge base
+- Retrieve available GitHub evidence
+- Analyze project health
+- Generate a proposed task plan
+- Run existing project simulations
+- Create approved tasks
+- Update approved task assignments
+- Update approved blockers
+- Record audit events
+
+Only implement a tool when its underlying operation actually exists or can be safely implemented.
+
+### Tool execution rules
+
+- Validate arguments using schemas.
+- Authenticate and authorize every operation.
+- Restrict all queries to the correct project and user scope.
+- Return structured results with explicit errors.
+- Keep read tools separate from write tools.
+- Require an approved operation plan for writes.
+- Recheck approval and permissions immediately before each write.
+- Use idempotency keys or equivalent safeguards for repeatable operations.
+- Log successful and failed mutations appropriately.
+- Never allow the LLM to execute arbitrary SQL, shell commands, or filesystem operations.
+- Never allow the LLM to choose arbitrary table names or bypass business logic.
+- Never permit a tool to access another project merely because its ID appears in a prompt.
+
+A prompt injection inside a document, task description, GitHub issue, or retrieved code must not grant new permissions or trigger an unapproved mutation.
+
+If a requested tool operation is not supported, explain the limitation instead of simulating success.
+
+---
+
+## 12. Frontend: Minimal, Clean, Professional
+
+This is a strict requirement.
+
+Do not redesign the entire PULSE interface. Preserve its existing visual language, layout, typography, spacing, navigation, and responsive behavior.
+
+Do not create unnecessary dashboards, floating AI widgets, decorative animations, duplicate sidebars, redundant tabs, excessive cards, or multiple interfaces for the same function.
+
+### Add only the UI necessary for the features
+
+1. **Project Assistant:** A clean chat interface with loading states, readable answers, errors, and source citations.
+2. **Knowledge Sources:** A simple place in the existing project context to upload supported documents and see ingestion status.
+3. **Document Planner:** A preview of proposed tasks, subtasks, assignments, dependencies, and acceptance criteria with edit, approve, and reject controls.
+4. **Workflow Status:** A small, clear status display for running, waiting for approval, completed, cancelled, and failed workflows.
+5. **Investigation Results:** A structured report showing verified GitHub evidence and links.
+
+Reuse existing pages and components where practical. If a suitable UI already exists, extend it rather than creating another.
+
+### Frontend behavior
+
+- Use the existing API client and authentication mechanism.
+- Never expose the Groq API key to the frontend.
+- Display genuine backend status, not hardcoded progress.
+- Handle loading, empty, success, partial success, and error states.
+- Disable duplicate submissions while appropriate.
+- Make approval actions explicit and unambiguous.
+- Display citations as links only when the destination is verified and accessible.
+- Show when a claim is inferred or unverified.
+- Ensure keyboard accessibility and responsive layouts.
+- Preserve existing functionality and avoid unnecessary changes to unrelated screens.
+
+Do not add an extra library when the existing stack already solves the problem adequately.
+
+---
+
+## 13. API Design and Backward Compatibility
+
+Inspect existing API patterns before adding routes.
+
+Keep the existing AI endpoint compatible where practical. Add only the additional endpoints required for the actual features.
+
+Potential endpoint responsibilities include:
+
+- Chat/query execution
+- Document upload and ingestion status
+- Retrieval or source inspection where useful
+- Workflow creation
+- Workflow status and result retrieval
+- Pending approval retrieval
+- Plan approval, rejection, and editing
+- Safe workflow resumption
+- Investigation reports
+
+These are responsibilities, not a demand to create every endpoint regardless of need. Follow existing naming and response conventions.
+
+For every endpoint:
+
+- Authenticate the caller.
+- Authorize the requested resource.
+- Validate input.
+- Return predictable response schemas.
+- Use appropriate HTTP status codes.
+- Avoid leaking internal errors.
+- Enforce file and request limits.
+- Add tests.
+- Document the endpoint and any changed response contract.
+
+If the frontend requires an API change, update the backend, frontend, types, and tests together.
+
+### Streaming
+
+Use server-sent events or another existing compatible streaming mechanism only if it materially improves the experience.
+
+If streaming is implemented:
+
+- Handle disconnects.
+- Handle authorization failures.
+- Define typed event payloads.
+- Avoid sending secrets or private data outside the authorized scope.
+- Distinguish progress updates from final results.
+- Do not treat an emitted progress event as proof of a completed operation.
+
+Do not introduce streaming solely for visual effect.
+
+---
+
+## 14. Data Models and Persistence
+
+Inspect the existing schema first and reuse current tables wherever appropriate.
+
+Add only the data structures needed for durable AI operation, such as:
+
+- Conversation metadata, if existing conversation storage is insufficient
+- Workflow execution records
+- Workflow checkpoints
+- Document metadata and ingestion status
+- Chunk metadata and embedding references
+- Source provenance
+- Approval records
+- Idempotency or operation records, where necessary
+
+Do not duplicate existing tasks, projects, users, members, or audit logs in new AI-specific tables.
+
+### Data integrity
+
+- Keep references between records valid.
+- Prevent cross-project relationships.
+- Preserve the initiating user and project scope.
+- Store enough provenance to trace answers back to their sources.
+- Avoid storing sensitive information unnecessarily.
+- Use safe migrations.
+- Verify data persistence after restart.
+- Implement deletion and re-indexing behavior appropriate to document access and retention requirements.
+
+Do not store large vectors or complete document contents in an unsuitable location without evaluating the existing storage architecture and performance implications.
+
+---
+
+## 15. Observability and Auditability
+
+Record enough information to investigate failures and verify important operations.
+
+Use the existing audit-log mechanism when appropriate.
+
+Track:
+
+- Workflow creation and completion
+- Workflow failures and retries
+- Document ingestion outcomes
+- Approval and rejection events
+- AI-triggered mutations
+- Task and assignment changes
+- Source retrieval metadata where useful
+- Permission denials
+- External provider failures
+
+Audit events should include the actor, project scope, operation, timestamp, outcome, and relevant record IDs.
+
+Do not log API keys, passwords, complete sensitive documents, or unnecessary private conversation text.
+
+For each important AI-generated answer, preserve source references where appropriate so the system can explain what evidence supported its response.
+
+The system must distinguish between:
+
+- An LLM-generated recommendation
+- A retrieved fact
+- An approved action
+- A successfully persisted change
+
+These are different events and must not be conflated.
+
+---
+
+## 16. Testing Requirements
+
+Tests are part of implementation, not an optional final step.
+
+Inspect the current test framework and extend it instead of introducing a competing testing system.
+
+### A. Unit tests
+
+Test:
+
+- Input validation
+- Structured output schemas
+- Requirement extraction post-processing
+- Dependency validation and cycle detection
+- Permission checks
+- Source attribution
+- Retrieval ranking
+- Error handling
+- Idempotency behavior
+- Existing business utility integration
+
+### B. Integration tests
+
+Test:
+
+- Groq client configuration
+- AI API request and response contracts
+- Database retrieval
+- Document ingestion
+- Persistent vector retrieval
+- GitHub evidence retrieval using controlled fixtures
+- LangChain tool execution
+- LangGraph state transitions
+- Checkpoint persistence
+- Workflow resumption
+- Approval and rejection
+- Database writes
+- Audit logging
+
+Mock external network responses in tests when appropriate, but never use those mocks as the production implementation.
+
+Tests that require a live Groq key must be clearly separated from deterministic local tests. If no API key is available, validate configuration and failure behavior without claiming that a live model call was tested.
+
+### C. Security tests
+
+Test that:
+
+- Unauthenticated users cannot access protected resources.
+- Invalid or forged tokens are rejected.
+- One user cannot access another user's private data.
+- One project member cannot read another project's restricted information.
+- Private document chunks cannot leak through RAG.
+- Revoked access is enforced on subsequent retrievals.
+- Unauthorized users cannot approve or execute workflows.
+- An expired or modified approval cannot authorize a different plan.
+- Duplicate requests do not create duplicate tasks.
+- Prompt injection cannot bypass server-side permissions or approval requirements.
+- Arbitrary SQL or shell execution is not available through AI tools.
+
+### D. End-to-end tests
+
+Verify the important user journeys:
+
+1. A logged-in user asks a question about their project.
+2. The assistant retrieves relevant database facts and returns a grounded answer.
+3. A user uploads a supported PDF and sees the real ingestion result.
+4. A subsequent question retrieves relevant document chunks with citations.
+5. A project lead investigates GitHub activity and receives real source references.
+6. A user generates a project plan from a document.
+7. The user edits and approves the plan.
+8. Approved tasks are created and verified in the database.
+9. A workflow survives interruption and resumes without duplicating changes.
+10. An unauthorized user cannot perform the same actions.
+
+### E. Regression tests
+
+Run the existing tests and verify that existing project management features still work.
+
+Do not delete failing tests, weaken assertions, skip relevant tests, or change expected behavior merely to get a green test result.
+
+Fix genuine regressions caused by the implementation.
+
+---
+
+## 17. Performance and Reliability
+
+Avoid sending the entire database or all project history to the model.
+
+- Query only relevant records.
+- Paginate large result sets.
+- Apply reasonable context limits.
+- Use retrieval for large document collections.
+- Cache only where correctness, authorization, and invalidation can be maintained.
+- Prevent duplicate ingestion and workflow execution.
+- Avoid blocking the main request indefinitely for large files.
+- Add timeouts and bounded retries.
+- Handle rate limits and provider failures.
+- Clean up temporary files safely.
+- Avoid loading all vector records into memory on every request if the collection grows.
+- Keep the UI responsive while long-running jobs execute.
+
+Do not optimize by weakening access control, skipping evidence, or returning fabricated results.
+
+---
+
+## 18. Environment and Configuration
+
+Update `.env.example` with the required variable names and safe example values. Never insert actual secrets.
+
+Document configuration for:
+
+- Groq API key
+- Groq model
+- Trusted frontend origins
+- Existing database location
+- Embedding provider and model
+- Vector persistence location, if separate
+- GitHub credentials or integration settings, if required
+- Upload storage and size limits
+- Workflow checkpoint storage
+- Optional logging and rate-limit settings
+
+Reuse existing configuration names when they are already established. Do not create multiple competing variables for the same setting.
+
+Validate required configuration at startup and return actionable errors for missing values. Do not expose environment variables to the browser.
+
+Do not make a working application fail to start merely because an optional integration is not configured. Disable the affected feature safely and clearly report its configuration requirement.
+
+---
+
+## 19. Documentation
+
+Update the repository documentation in concise, practical English.
+
+Document:
+
+- Architecture and module responsibilities
+- How the Groq model is configured
+- How to install dependencies
+- How to run the application
+- Required environment variables
+- How document ingestion and RAG work
+- Which embedding model or provider is used
+- How LangGraph workflows are structured
+- How approval and workflow resumption work
+- Supported document formats
+- How GitHub evidence is retrieved
+- How database migrations are run
+- How to run tests
+- Known limitations and unconfigured integrations
+
+Do not claim unsupported features or successful live API calls in the documentation.
+
+---
+
+## 20. Required Implementation Order
+
+Follow these phases to reduce the chance of breaking the application.
+
+### Phase 1: Inspect and establish a baseline
+
+- Audit the repository.
+- Identify disconnected or simulated AI code.
+- Check the current Git state and preserve unrelated user changes.
+- Run existing tests and the production build.
+- Record pre-existing failures separately.
+- Inspect security issues and dependencies.
+
+Do not overwrite uncommitted work.
+
+### Phase 2: Fix foundational security
+
+- Fix authentication and authorization weaknesses that remain.
+- Add secure configuration handling.
+- Restrict CORS.
+- Ensure protected routes and existing data access are safe.
+- Add regression tests.
+
+Do not enable privileged AI write operations before these controls pass.
+
+### Phase 3: Establish the real AI foundation
+
+- Install compatible official/maintained LangChain and LangGraph packages.
+- Integrate Groq using `openai/gpt-oss-120b`.
+- Add structured input/output validation.
+- Integrate the AI service with existing business services.
+- Keep backward compatibility where practical.
+- Test provider errors and configuration failures.
+
+### Phase 4: Implement real RAG
+
+- Build the document ingestion pipeline.
+- Implement real embeddings and persistent vector retrieval.
+- Add source metadata and citations.
+- Enforce project and document access restrictions.
+- Test ingestion, retrieval, persistence, and access revocation.
+
+### Phase 5: Implement the project assistant and investigation tools
+
+- Ground answers in live database records.
+- Add authorized project retrieval tools.
+- Integrate GitHub evidence.
+- Implement the contribution investigator.
+- Verify that claims have real evidence.
+
+### Phase 6: Implement LangGraph workflows
+
+- Project analyst
+- Project recovery planner
+- Meeting-to-tasks
+- Document-to-project planner
+- Contribution investigator
+
+Add persistent state, resumability, explicit approval, idempotent writes, and audit logging.
+
+### Phase 7: Integrate the minimal frontend
+
+- Reuse existing pages and components.
+- Add only essential controls.
+- Connect every control to a real backend operation.
+- Implement loading, errors, citations, approvals, and workflow status.
+- Verify responsive behavior and existing routes.
+
+### Phase 8: Verify everything
+
+- Run migrations.
+- Run tests.
+- Run type checking.
+- Run the production build.
+- Run security and regression tests.
+- Fix failures introduced by the changes.
+- Test the main workflows end to end where the environment permits.
+- Check for unused duplicate implementations and unmounted routes.
+- Review the final diff for unrelated changes, exposed secrets, debug code, and accidental data loss.
+
+Do not stop after a phase simply because the code compiles. Continue through all phases that can be completed in the available environment.
+
+---
+
+## 21. Definition of Done
+
+The implementation is complete only when all applicable criteria below have been verified.
+
+### AI and integrations
+
+- [ ] The actual Groq integration uses `openai/gpt-oss-120b`.
+- [ ] No silent switch to another LLM provider occurs.
+- [ ] The actual application calls the real AI service.
+- [ ] Official/maintained LangChain and LangGraph packages are used for their claimed functionality.
+- [ ] The AI code is connected to the actual Express application.
+- [ ] The existing AI endpoint remains compatible where practical.
+
+### RAG
+
+- [ ] Supported documents are parsed by real parsers.
+- [ ] Real embeddings are generated.
+- [ ] Vectors and metadata persist correctly.
+- [ ] Retrieval uses actual indexed data.
+- [ ] Answers include real source references where available.
+- [ ] Project and document permissions are enforced.
+- [ ] Failed ingestion is visible and recoverable.
+
+### Agents and workflows
+
+- [ ] Required workflows use real graph nodes and transitions.
+- [ ] Workflow state is persisted appropriately.
+- [ ] Interrupted workflows can resume safely.
+- [ ] Approval is required before protected writes.
+- [ ] Approval is bound to the correct plan version.
+- [ ] Repeated requests cannot accidentally duplicate writes.
+- [ ] Important mutations are audited.
+- [ ] Results are verified against the database.
+
+### Security
+
+- [ ] Password and token handling is secure.
+- [ ] Authentication is enforced on protected endpoints.
+- [ ] Resource-level authorization is enforced server-side.
+- [ ] AI tools cannot bypass application permissions.
+- [ ] Secrets are not exposed in frontend code or logs.
+- [ ] Prompt injection cannot authorize privileged actions.
+
+### Frontend and quality
+
+- [ ] Existing design is preserved.
+- [ ] Only necessary controls have been added.
+- [ ] All new controls call actual backend functionality.
+- [ ] Existing project management features still work.
+- [ ] Tests, type checking, and build have been run.
+- [ ] Remaining failures are accurately documented.
+- [ ] Setup and configuration instructions are updated.
+
+If an item cannot be completed because a credential, external service, or environment capability is unavailable, implement as much as safely possible, explain the blocker, and identify exactly how to verify the remaining behavior. Never mark an untested item as passed.
+
+---
+
+## 22. Final Report Required
+
+When implementation is finished, provide a concise, factual report with these sections:
+
+1. **Implemented:** Features that are actually connected and working.
+2. **Architecture:** Important modules and how data flows through the system.
+3. **Security:** Vulnerabilities fixed and any remaining risks.
+4. **Database:** Migrations and new persistent records.
+5. **Frontend:** Exact UI changes, confirming that unrelated screens were preserved.
+6. **Tests:** Commands run and actual pass/fail results.
+7. **Build:** Actual type-check and production-build results.
+8. **Configuration:** Environment variables or credentials still required.
+9. **Limitations:** Anything incomplete, unverified, or blocked.
+10. **Changed files:** A concise list of important files changed.
+
+Distinguish clearly between:
+
+- Implemented and tested
+- Implemented but not live-tested
+- Partially implemented
+- Not implemented
+
+Do not claim perfection, successful deployment, or successful live integrations without evidence.
+
+## Final instruction
+
+Start by inspecting the actual PULSE repository and establishing a baseline. Then implement the requirements in the order above, using small, verifiable changes.
+
+**Prioritize correctness, security, evidence, backward compatibility, and a clean frontend over speed or impressive-looking output.**
+
+Do not replace the existing project with a new scaffold. Do not stop at planning. Do not simulate missing functionality. Do not hide failures. Finish the implementation, verify what is possible, and report the truth about the result.

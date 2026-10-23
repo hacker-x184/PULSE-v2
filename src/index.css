@@ -1,0 +1,516 @@
+@import "tailwindcss";
+
+:root {
+  /* =========================================================================
+     Precision Minimalism Theme System (Linear-inspired) - Light Mode
+     ========================================================================= */
+  --bg-main: #F7F7F8;
+  --surface-primary: #FFFFFF;
+  --surface-secondary: #F0F0F2;
+  --surface-tertiary: #E8E8ED;
+  --bg-sidebar: #F0F0F2;
+  --bg-sidebar-hover: #E4E4E9;
+  --bg-sidebar-active: #DCDCE3;
+  --text-primary: #25252B;
+  --text-secondary: #6B6B76;
+  --text-muted: #8E8E98;
+  --primary-accent: #6E63E8;
+  --accent-hover: #5A4FD1;
+  --accent-light: #F3F2FD;
+  --accent-subtle: #E5E3FB;
+  --border-color: #E5E5EA;
+  --border-subtle: #EDEDF2;
+  --border-strong: #D5D5DC;
+
+  --color-success: #27845A;
+  --color-success-bg: #EAF6F0;
+  --color-success-border: #C0E6D4;
+
+  --color-warning: #C58A26;
+  --color-warning-bg: #FCF6EC;
+  --color-warning-border: #F3E0BD;
+
+  --color-error: #D64545;
+  --color-error-bg: #FDF1F1;
+  --color-error-border: #F7C4C4;
+
+  --color-info: #4779C4;
+  --color-info-bg: #EEF4FD;
+  --color-info-border: #C5DBF8;
+
+  --shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  --shadow-modal: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+}
+
+.dark, [data-theme="dark"] {
+  /* =========================================================================
+     Precision Minimalism Theme System (Linear-inspired) - Dark Mode
+     ========================================================================= */
+  --bg-main: #111318;
+  --surface-primary: #191B22;
+  --surface-secondary: #1F222B;
+  --surface-tertiary: #272A35;
+  --bg-sidebar: #15171D;
+  --bg-sidebar-hover: #1C1F27;
+  --bg-sidebar-active: #242833;
+  --text-primary: #F1F1F4;
+  --text-secondary: #A1A1AD;
+  --text-muted: #6E707D;
+  --primary-accent: #8B80F9;
+  --accent-hover: #A198FF;
+  --accent-light: #232042;
+  --accent-subtle: #332E63;
+  --border-color: #2B2E38;
+  --border-subtle: #22242D;
+  --border-strong: #3A3E4B;
+
+  --color-success: #45B879;
+  --color-success-bg: #14281E;
+  --color-success-border: #1F4A32;
+
+  --color-warning: #E5B454;
+  --color-warning-bg: #2B2312;
+  --color-warning-border: #4E3F1F;
+
+  --color-error: #F06A6A;
+  --color-error-bg: #2D1616;
+  --color-error-border: #532323;
+
+  --color-info: #79A8F5;
+  --color-info-bg: #142238;
+  --color-info-border: #213B61;
+
+  --shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
+  --shadow-modal: 0 12px 30px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+}
+
+@layer base {
+  html {
+    color-scheme: light dark;
+    font-size: 16.5px; /* Elevated root typography scale for superior legibility */
+  }
+
+  body {
+    font-size: 1rem;
+    line-height: 1.55;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.011em;
+    margin: 0;
+    padding: 0;
+    transition: background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1), color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  code, pre, .font-mono, .tabular-nums {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Consistent scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+  }
+}
+
+/* =========================================================================
+   Global Typography Scale Enhancements
+   Raises font readability across the overall website (prevents micro-text)
+   ========================================================================= */
+
+/* Upgrade micro-sized badges and labels to comfortably readable dimensions */
+.text-\[9px\] {
+  font-size: 11.5px !important;
+  line-height: 1rem !important;
+}
+
+.text-\[10px\] {
+  font-size: 12.5px !important;
+  line-height: 1.15rem !important;
+}
+
+.text-\[11px\] {
+  font-size: 13.5px !important;
+  line-height: 1.25rem !important;
+}
+
+.text-xs {
+  font-size: 14px !important;
+  line-height: 1.35rem !important;
+}
+
+.text-sm {
+  font-size: 15.5px !important;
+  line-height: 1.45rem !important;
+}
+
+.text-base {
+  font-size: 17px !important;
+  line-height: 1.6rem !important;
+}
+
+.text-lg {
+  font-size: 19.5px !important;
+  line-height: 1.7rem !important;
+}
+
+.text-xl {
+  font-size: 23px !important;
+  line-height: 1.8rem !important;
+}
+
+.text-2xl {
+  font-size: 27px !important;
+  line-height: 2rem !important;
+}
+
+.text-3xl {
+  font-size: 33px !important;
+  line-height: 2.3rem !important;
+}
+
+/* =========================================================================
+   Centralized Surface & Typography Theme Overrides
+   Ensures 100% theme consistency across cards, modals, tables, and views
+   ========================================================================= */
+
+/* Main backgrounds & surfaces */
+.bg-white {
+  background-color: var(--surface-primary) !important;
+}
+
+.dark .bg-white,
+[data-theme="dark"] .bg-white {
+  background-color: var(--surface-primary) !important;
+}
+
+.bg-slate-50 {
+  background-color: var(--bg-main) !important;
+}
+
+.dark .bg-slate-50,
+[data-theme="dark"] .bg-slate-50 {
+  background-color: var(--bg-main) !important;
+}
+
+.bg-slate-100 {
+  background-color: var(--surface-secondary) !important;
+}
+
+.dark .bg-slate-100,
+[data-theme="dark"] .bg-slate-100 {
+  background-color: var(--surface-secondary) !important;
+}
+
+.bg-slate-200 {
+  background-color: var(--surface-tertiary) !important;
+}
+
+.dark .bg-slate-200,
+[data-theme="dark"] .bg-slate-200 {
+  background-color: var(--surface-tertiary) !important;
+}
+
+/* Typography mapping */
+.text-slate-900,
+.text-slate-800 {
+  color: var(--text-primary) !important;
+}
+
+.dark .text-slate-900,
+.dark .text-slate-800,
+[data-theme="dark"] .text-slate-900,
+[data-theme="dark"] .text-slate-800 {
+  color: var(--text-primary) !important;
+}
+
+.text-slate-700,
+.text-slate-600,
+.text-slate-500 {
+  color: var(--text-secondary) !important;
+}
+
+.dark .text-slate-700,
+.dark .text-slate-600,
+.dark .text-slate-500,
+[data-theme="dark"] .text-slate-700,
+[data-theme="dark"] .text-slate-600,
+[data-theme="dark"] .text-slate-500 {
+  color: var(--text-secondary) !important;
+}
+
+.text-slate-400 {
+  color: var(--text-muted) !important;
+}
+
+.dark .text-slate-400,
+[data-theme="dark"] .text-slate-400 {
+  color: var(--text-muted) !important;
+}
+
+/* Borders & Dividers */
+.border-slate-200,
+.border-slate-100,
+.border-slate-300 {
+  border-color: var(--border-color) !important;
+}
+
+.dark .border-slate-200,
+.dark .border-slate-100,
+.dark .border-slate-300,
+.dark .border-slate-700,
+.dark .border-slate-800,
+[data-theme="dark"] .border-slate-200,
+[data-theme="dark"] .border-slate-100,
+[data-theme="dark"] .border-slate-300,
+[data-theme="dark"] .border-slate-700,
+[data-theme="dark"] .border-slate-800 {
+  border-color: var(--border-color) !important;
+}
+
+.divide-slate-100 > * + *,
+.divide-slate-200 > * + *,
+.divide-slate-700 > * + *,
+.divide-slate-800 > * + * {
+  border-color: var(--border-color) !important;
+}
+
+/* Primary Accents (Precision Violet) */
+.bg-blue-600,
+.bg-blue-500 {
+  background-color: var(--primary-accent) !important;
+}
+
+.hover\:bg-blue-700:hover,
+.hover\:bg-blue-600:hover {
+  background-color: var(--accent-hover) !important;
+}
+
+.text-blue-600,
+.text-blue-500 {
+  color: var(--primary-accent) !important;
+}
+
+.hover\:text-blue-700:hover,
+.hover\:text-blue-600:hover {
+  color: var(--accent-hover) !important;
+}
+
+.border-blue-500,
+.border-blue-600 {
+  border-color: var(--primary-accent) !important;
+}
+
+.border-blue-200 {
+  border-color: var(--accent-subtle) !important;
+}
+
+.bg-blue-50,
+.bg-blue-50\/50,
+.bg-blue-50\/70 {
+  background-color: var(--accent-light) !important;
+}
+
+.text-blue-700,
+.text-blue-800,
+.text-blue-900 {
+  color: var(--primary-accent) !important;
+}
+
+/* Focus Rings */
+.focus\:ring-blue-500:focus,
+.focus\:ring-2:focus {
+  --tw-ring-color: var(--primary-accent) !important;
+}
+
+/* Success */
+.bg-emerald-600,
+.bg-emerald-500,
+.bg-green-600,
+.bg-green-500 {
+  background-color: var(--color-success) !important;
+}
+
+.text-emerald-600,
+.text-emerald-700,
+.text-emerald-800,
+.text-emerald-900,
+.text-green-600,
+.text-green-700 {
+  color: var(--color-success) !important;
+}
+
+.bg-emerald-50,
+.bg-emerald-50\/70,
+.bg-emerald-100,
+.bg-green-50 {
+  background-color: var(--color-success-bg) !important;
+}
+
+.border-emerald-200,
+.border-emerald-200\/80,
+.border-emerald-300,
+.border-green-200 {
+  border-color: var(--color-success-border) !important;
+}
+
+/* Warning */
+.bg-amber-600,
+.bg-amber-500,
+.bg-yellow-600 {
+  background-color: var(--color-warning) !important;
+}
+
+.text-amber-600,
+.text-amber-700,
+.text-amber-800,
+.text-amber-900 {
+  color: var(--color-warning) !important;
+}
+
+.bg-amber-50,
+.bg-amber-100 {
+  background-color: var(--color-warning-bg) !important;
+}
+
+.border-amber-200 {
+  border-color: var(--color-warning-border) !important;
+}
+
+/* Error / Critical Risk */
+.bg-rose-600,
+.bg-rose-500,
+.bg-red-600,
+.bg-red-500 {
+  background-color: var(--color-error) !important;
+}
+
+.text-rose-600,
+.text-rose-700,
+.text-rose-800,
+.text-red-600,
+.text-red-700 {
+  color: var(--color-error) !important;
+}
+
+.bg-rose-50,
+.bg-rose-100,
+.bg-red-50 {
+  background-color: var(--color-error-bg) !important;
+}
+
+.border-rose-200,
+.border-red-200 {
+  border-color: var(--color-error-border) !important;
+}
+
+/* Information */
+.bg-sky-600,
+.bg-sky-500,
+.bg-indigo-600 {
+  background-color: var(--color-info) !important;
+}
+
+.text-sky-600,
+.text-sky-700,
+.text-indigo-600 {
+  color: var(--color-info) !important;
+}
+
+.bg-sky-50,
+.bg-indigo-50 {
+  background-color: var(--color-info-bg) !important;
+}
+
+.border-sky-200,
+.border-indigo-200 {
+  border-color: var(--color-info-border) !important;
+}
+
+/* Form Controls & Inputs */
+input, select, textarea {
+  background-color: var(--surface-primary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.dark input, .dark select, .dark textarea,
+[data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea {
+  background-color: var(--surface-secondary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark input::placeholder, .dark textarea::placeholder,
+[data-theme="dark"] input::placeholder, [data-theme="dark"] textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--primary-accent) !important;
+  outline: none;
+}
+
+/* Hover States on Table Rows, Dropdown Options, Nav Items */
+.dark .hover\:bg-slate-50:hover,
+[data-theme="dark"] .hover\:bg-slate-50:hover {
+  background-color: var(--surface-secondary) !important;
+}
+
+.dark .hover\:bg-slate-100:hover,
+[data-theme="dark"] .hover\:bg-slate-100:hover {
+  background-color: var(--surface-tertiary) !important;
+}
+
+/* Shadows & Elevating Elements */
+.shadow-2xs, .shadow-xs, .shadow-sm {
+  box-shadow: var(--shadow-subtle) !important;
+}
+
+.shadow-md, .shadow-lg, .shadow-xl {
+  box-shadow: var(--shadow-card) !important;
+}
+
+.dark .shadow-xl, .dark .shadow-2xl,
+[data-theme="dark"] .shadow-xl, [data-theme="dark"] .shadow-2xl {
+  box-shadow: var(--shadow-modal) !important;
+}
+
+/* Dialogs & Modal Surfaces */
+.dark [role="dialog"],
+[data-theme="dark"] [role="dialog"] {
+  background-color: var(--surface-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Charts SVG Alignment */
+.recharts-cartesian-grid line {
+  stroke: var(--border-color) !important;
+}
+
+.recharts-text,
+.recharts-cartesian-axis-tick text {
+  fill: var(--text-secondary) !important;
+}
+
+.recharts-default-tooltip {
+  background-color: var(--surface-primary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+  box-shadow: var(--shadow-modal) !important;
+  border-radius: 8px !important;
+}
