@@ -53,17 +53,39 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     return {} as T;
   }
 
+  const contentType = response.headers.get('content-type') || '';
+  const isJson = contentType.toLowerCase().includes('application/json');
+
   if (!response.ok) {
-    let errorDetail = 'An unexpected server error occurred';
-    try {
-      const errorData = await response.json();
-      if (errorData.detail) {
-        errorDetail = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+    let errorDetail = `HTTP ${response.status}: ${response.statusText || 'Server Error'}`;
+    if (isJson) {
+      try {
+        const errorData = await response.json();
+        if (errorData.detail) {
+          errorDetail = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+        } else if (errorData.message) {
+          errorDetail = typeof errorData.message === 'string' ? errorData.message : JSON.stringify(errorData.message);
+        }
+      } catch {
+        // Fallback
       }
-    } catch {
-      errorDetail = `HTTP ${response.status}: ${response.statusText}`;
+    } else {
+      try {
+        const rawText = await response.text();
+        if (rawText && !rawText.includes('<!doctype') && !rawText.includes('<html')) {
+          errorDetail = rawText.slice(0, 180);
+        }
+      } catch {
+        // Fallback
+      }
     }
     throw new Error(errorDetail);
+  }
+
+  if (!isJson) {
+    const rawText = await response.text();
+    console.warn(`[PULSE API] Received non-JSON response from ${endpoint} (${contentType || 'text/html'}):`, rawText.slice(0, 80));
+    throw new Error(`API endpoint ${endpoint} returned unexpected non-JSON response (${contentType || 'text/html'})`);
   }
 
   return response.json();
@@ -329,6 +351,38 @@ export const api = {
   // AI Assistant (Agentic Groq openai/gpt-oss-120b + Hybrid RAG + LangChain Tools)
   async queryAI(data: { prompt: string; project_id?: string; enable_tools?: boolean }): Promise<any> {
     return request<any>('/ai/query', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  // ElevenLabs Voice Services (STT & TTS)
+  async getVoiceConfig(): Promise<{
+    isConfigured: boolean;
+    modelStt: string;
+    modelTts: string;
+    defaultVoiceId: string;
+    supportedLanguages: Array<{ code: string; label: string }>;
+  }> {
+    return request<any>('/ai/voice/config');
+  },
+
+  async transcribeAudio(data: { audio_base64: string; mime_type?: string; language_code?: string }): Promise<{
+    text: string;
+    language_code?: string;
+    duration_secs?: number;
+  }> {
+    return request<any>('/ai/voice/transcribe', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async synthesizeSpeech(data: { text: string; voice_id?: string }): Promise<{
+    audio_base64: string;
+    content_type: string;
+  }> {
+    return request<any>('/ai/voice/synthesize', {
       method: 'POST',
       body: JSON.stringify(data)
     });
@@ -717,6 +771,49 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     });
+  },
+
+  // Autonomous AI Project Manager
+  async startAutonomousPM(data: { project_id?: string; idea?: string; document_id?: string; document_content?: string; document_filename?: string }): Promise<any> {
+    return request<any>('/ai/pm/start', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async clarifyAutonomousPM(workflowId: string, data: { answers?: any[]; additional_requirements?: string; force_generate_plan?: boolean }): Promise<any> {
+    return request<any>(`/ai/pm/${workflowId}/clarify`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async generatePlanAutonomousPM(workflowId: string): Promise<any> {
+    return request<any>(`/ai/pm/${workflowId}/generate-plan`, {
+      method: 'POST'
+    });
+  },
+
+  async updatePlanAutonomousPM(workflowId: string, plan: any): Promise<any> {
+    return request<any>(`/ai/pm/${workflowId}/plan`, {
+      method: 'PUT',
+      body: JSON.stringify({ plan })
+    });
+  },
+
+  async approveAutonomousPM(workflowId: string, data?: { plan_hash?: string }): Promise<any> {
+    return request<any>(`/ai/pm/${workflowId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(data || {})
+    });
+  },
+
+  async getAutonomousPMStatus(workflowId: string): Promise<any> {
+    return request<any>(`/ai/pm/${workflowId}/status`);
+  },
+
+  async monitorAutonomousPM(workflowId: string): Promise<any> {
+    return request<any>(`/ai/pm/${workflowId}/monitor`);
   },
 
   // System

@@ -18,19 +18,28 @@ import {
   Trash2,
   GitBranch,
   Play,
+  Pause,
   AlertTriangle,
   FileCheck,
   Clock,
   Layers,
   ArrowRight,
-  ShieldAlert
+  ShieldAlert,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
+  Square
 } from 'lucide-react';
 import { api } from '../../api/client';
+import { AutonomousPMTab } from './AutonomousPMTab';
 
 interface AIAssistantDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   selectedProjectId: string;
+  projects?: Array<{ id: string; name: string }>;
+  onSelectProject?: (projectId: string) => void;
 }
 
 interface ChatMessage {
@@ -42,6 +51,8 @@ interface ChatMessage {
   modelUsed?: string;
   groundingDataPoints?: number;
   sourcesUsed?: string[];
+  audioBase64?: string;
+  isVoiceInput?: boolean;
 }
 
 const SUGGESTIONS = [
@@ -51,25 +62,34 @@ const SUGGESTIONS = [
   'Provide an overview of team contribution metrics'
 ];
 
-type ActiveTab = 'chat' | 'documents' | 'workflows' | 'github';
+type ActiveTab = 'pm' | 'chat' | 'documents' | 'workflows' | 'github';
 
 export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
   isOpen,
   onClose,
-  selectedProjectId
+  selectedProjectId,
+  projects = [],
+  onSelectProject
 }) => {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('chat');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('pm');
+  const [currentProject, setCurrentProject] = useState<string>(selectedProjectId || (projects.length > 0 ? projects[0].id : 'all'));
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      setCurrentProject(selectedProjectId);
+    } else if (projects.length > 0 && currentProject === 'all') {
+      setCurrentProject(projects[0].id);
+    }
+  }, [selectedProjectId, projects]);
 
   // Chat State
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'init-1',
       sender: 'assistant',
-      text: 'Hello! I am your PULSE Intelligence Assistant powered by Groq (openai/gpt-oss-120b). My responses are grounded in real SQLite database records, verified GitHub commits, and ingested PDF knowledge chunks. How can I assist your project today?',
+      text: 'Hello! I am your Helping Agent. How can I assist you with your project today?',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      modelUsed: 'openai/gpt-oss-120b',
-      groundingDataPoints: 0,
-      sourcesUsed: ['Local SQLite Database Records']
+      groundingDataPoints: 0
     }
   ]);
   const [inputPrompt, setInputPrompt] = useState('');
@@ -95,7 +115,257 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
   const [investigatorReport, setInvestigatorReport] = useState<any | null>(null);
   const [isInvestigating, setIsInvestigating] = useState(false);
 
-  const effectiveProjectId = selectedProjectId || 'p-ledger';
+  // ElevenLabs Voice State
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [activeAudioMsgId, setActiveAudioMsgId] = useState<string | null>(null);
+  const [isSynthesizingVoice, setIsSynthesizingVoice] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceLanguage, setVoiceLanguage] = useState<'auto' | 'en' | 'hi'>('auto');
+  const [voiceConfig, setVoiceConfig] = useState<any>(null);
+  const [pendingTranscript, setPendingTranscript] = useState<{ text: string; detectedLang?: string } | null>(null);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<any>(null);
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    api.getVoiceConfig().then(cfg => {
+      setVoiceConfig(cfg);
+    }).catch(() => {
+      // Non-blocking status check
+    });
+  }, []);
+
+  const stopPlayback = () => {
+    if (audioElementRef.current) {
+      audioElementRef.current.pause();
+      audioElementRef.current.currentTime = 0;
+      audioElementRef.current = null;
+    }
+    setIsSpeaking(false);
+    setActiveAudioMsgId(null);
+    setIsSynthesizingVoice(false);
+  };
+
+  const cancelRecording = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
+    }
+    audioChunksRef.current = [];
+    setIsRecording(false);
+    setRecordingDuration(0);
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      stopPlayback();
+      cancelRecording();
+      setVoiceError(null);
+      setPendingTranscript(null);
+    }
+  }, [isOpen]);
+
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        const base64 = result.split(',')[1] || '';
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const startRecording = async () => {
+    if (isRecording || isTranscribing) return;
+    setVoiceError(null);
+    setPendingTranscript(null);
+    stopPlayback();
+
+    try {
+      if (!navigator?.mediaDevices?.getUserMedia) {
+        setVoiceError('Microphone audio recording is not supported in this browser environment.');
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+
+      let mimeType = 'audio/webm';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+          mimeType = 'audio/ogg';
+        }
+      }
+
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+      };
+
+      recorder.start(250);
+      setIsRecording(true);
+      setRecordingDuration(0);
+
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    } catch (err: any) {
+      console.warn('Microphone permission check:', err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setVoiceError('Microphone permission denied. Please allow microphone access in your browser to speak.');
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        setVoiceError('No microphone input device found.');
+      } else {
+        setVoiceError(`Microphone error: ${err.message || 'Could not access audio device.'}`);
+      }
+      setIsRecording(false);
+    }
+  };
+
+  const stopAndTranscribe = async (autoSubmit = false) => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+
+    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
+      setIsRecording(false);
+      return;
+    }
+
+    const mimeType = mediaRecorderRef.current.mimeType || 'audio/webm';
+
+    const recordedBlobPromise = new Promise<Blob>((resolve) => {
+      if (!mediaRecorderRef.current) return resolve(new Blob());
+      mediaRecorderRef.current.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        mediaRecorderRef.current?.stream?.getTracks().forEach(t => t.stop());
+        resolve(blob);
+      };
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {
+        resolve(new Blob());
+      }
+    });
+
+    setIsRecording(false);
+    setRecordingDuration(0);
+    setIsTranscribing(true);
+    setVoiceError(null);
+
+    try {
+      const audioBlob = await recordedBlobPromise;
+      if (!audioBlob || audioBlob.size === 0) {
+        throw new Error('No audio captured. Please speak into the microphone and try again.');
+      }
+
+      const base64Audio = await blobToBase64(audioBlob);
+      const res = await api.transcribeAudio({
+        audio_base64: base64Audio,
+        mime_type: mimeType,
+        language_code: voiceLanguage !== 'auto' ? voiceLanguage : undefined
+      });
+
+      const recognized = (res.text || '').trim();
+      if (!recognized) {
+        setVoiceError('No clear speech detected in recording. Please try speaking closer to your microphone.');
+        return;
+      }
+
+      if (autoSubmit) {
+        handleSend(recognized, true);
+      } else {
+        setInputPrompt(recognized);
+        setPendingTranscript({
+          text: recognized,
+          detectedLang: res.language_code
+        });
+      }
+    } catch (err: any) {
+      console.warn('Voice transcription notice:', err);
+      setVoiceError(err.message || 'ElevenLabs transcription failed. You can still type your query.');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const playAudioForMessage = async (msgId: string, text: string, existingBase64?: string) => {
+    if (activeAudioMsgId === msgId && isSpeaking) {
+      stopPlayback();
+      return;
+    }
+
+    stopPlayback();
+
+    if (isMuted) {
+      setIsMuted(false);
+    }
+
+    setActiveAudioMsgId(msgId);
+
+    try {
+      let base64Audio = existingBase64;
+      if (!base64Audio) {
+        setIsSynthesizingVoice(true);
+        const res = await api.synthesizeSpeech({ text });
+        base64Audio = res.audio_base64;
+        setMessages(prev => prev.map(m => m.id === msgId ? { ...m, audioBase64: base64Audio } : m));
+      }
+
+      const audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
+      const audio = new Audio(audioUrl);
+      audioElementRef.current = audio;
+
+      audio.onplay = () => {
+        setIsSpeaking(true);
+        setIsSynthesizingVoice(false);
+      };
+      audio.onended = () => {
+        stopPlayback();
+      };
+      audio.onerror = () => {
+        stopPlayback();
+        setVoiceError('Audio playback failed in browser.');
+      };
+
+      await audio.play();
+    } catch (err: any) {
+      stopPlayback();
+      setVoiceError(err.message || 'Failed to synthesize speech with ElevenLabs.');
+    } finally {
+      setIsSynthesizingVoice(false);
+    }
+  };
+
+  const effectiveProjectId = currentProject || selectedProjectId || 'all';
 
   const loadDocuments = async () => {
     try {
@@ -142,16 +412,20 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  const handleSend = async (promptToSend?: string) => {
+  const handleSend = async (promptToSend?: string, isVoiceInitiated = false) => {
     const text = (promptToSend || inputPrompt).trim();
     if (!text || isLoading) return;
+
+    setPendingTranscript(null);
+    stopPlayback();
 
     const userMsgId = `user-${Date.now()}`;
     const userMessage: ChatMessage = {
       id: userMsgId,
       sender: 'user',
       text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isVoiceInput: isVoiceInitiated
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -160,17 +434,21 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
 
     try {
       const res = await api.queryAI({ prompt: text, project_id: effectiveProjectId });
+      const assistantMsgId = `ai-${Date.now()}`;
       const assistantMsg: ChatMessage = {
-        id: `ai-${Date.now()}`,
+        id: assistantMsgId,
         sender: 'assistant',
         text: res.response,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         hasApiKey: res.has_api_key,
-        modelUsed: res.model_used || 'openai/gpt-oss-120b',
         groundingDataPoints: res.grounding_data_points,
         sourcesUsed: res.sources_used
       };
       setMessages(prev => [...prev, assistantMsg]);
+
+      if (isVoiceInitiated && !isMuted) {
+        playAudioForMessage(assistantMsgId, res.response);
+      }
     } catch (err: any) {
       const errorMsg: ChatMessage = {
         id: `err-${Date.now()}`,
@@ -317,16 +595,33 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                    PULSE AI Assistant
+                    PULSE Assistant
                   </h3>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                    openai/gpt-oss-120b
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Helping Agent
                   </span>
                 </div>
-                <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
-                  <FolderKanban className="w-3 h-3 text-[var(--text-muted)]" />
-                  Project: <span className="font-semibold">{effectiveProjectId}</span>
-                </p>
+                <div className="text-xs text-[var(--text-secondary)] flex items-center gap-1.5 mt-0.5">
+                  <FolderKanban className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
+                  <span className="text-[var(--text-muted)] text-[11px]">Context:</span>
+                  <select
+                    value={effectiveProjectId}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setCurrentProject(next);
+                      if (onSelectProject) onSelectProject(next);
+                    }}
+                    className="bg-[var(--surface-tertiary)] text-[var(--text-primary)] text-xs font-medium rounded px-1.5 py-0.5 border border-[var(--border-color)] focus:outline-hidden focus:ring-1 focus:ring-[var(--primary-accent)] cursor-pointer"
+                  >
+                    <option value="all">All Projects (Workspace Overview)</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -343,23 +638,35 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
           </div>
 
           {/* Navigation Tabs */}
-          <div className="px-4 border-b border-[var(--border-color)] bg-[var(--surface-primary)] flex gap-2">
+          <div className="px-4 border-b border-[var(--border-color)] bg-[var(--surface-primary)] flex gap-2 overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => setActiveTab('pm')}
+              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                activeTab === 'pm'
+                  ? 'border-[var(--primary-accent)] text-[var(--primary-accent)]'
+                  : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Autonomous PM
+            </button>
             <button
               type="button"
               onClick={() => setActiveTab('chat')}
-              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ${
                 activeTab === 'chat'
                   ? 'border-[var(--primary-accent)] text-[var(--primary-accent)]'
                   : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
               <Bot className="w-3.5 h-3.5" />
-              Grounded Chat
+              Chat
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('documents')}
-              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ${
                 activeTab === 'documents'
                   ? 'border-[var(--primary-accent)] text-[var(--primary-accent)]'
                   : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -371,19 +678,19 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('workflows')}
-              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ${
                 activeTab === 'workflows'
                   ? 'border-[var(--primary-accent)] text-[var(--primary-accent)]'
                   : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              LangGraph Workflows ({workflows.length})
+              Workflows ({workflows.length})
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('github')}
-              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ${
                 activeTab === 'github'
                   ? 'border-[var(--primary-accent)] text-[var(--primary-accent)]'
                   : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -393,6 +700,18 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
               GitHub Attribution
             </button>
           </div>
+
+          {/* TAB 0: Autonomous AI Project Manager */}
+          {activeTab === 'pm' && (
+            <AutonomousPMTab
+              selectedProjectId={effectiveProjectId}
+              projects={projects}
+              documents={documents}
+              onWorkflowExecuted={() => {
+                loadWorkflows();
+              }}
+            />
+          )}
 
           {/* TAB 1: Grounded Chat */}
           {activeTab === 'chat' && (
@@ -419,25 +738,8 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
                       <div className="whitespace-pre-wrap">{msg.text}</div>
 
                       {msg.sender === 'assistant' && (
-                        <div className="mt-2.5 pt-2 border-t border-[var(--border-color)]/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--text-muted)]">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {msg.modelUsed && (
-                              <span className="px-1.5 py-0.5 rounded bg-[var(--surface-tertiary)] font-mono text-[10px]">
-                                {msg.modelUsed}
-                              </span>
-                            )}
-                            {msg.groundingDataPoints !== undefined && msg.groundingDataPoints > 0 && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono text-[10px]">
-                                <ShieldCheck className="w-3 h-3 text-emerald-500" />
-                                {msg.groundingDataPoints} data points
-                              </span>
-                            )}
-                            {msg.sourcesUsed && msg.sourcesUsed.length > 0 && (
-                              <span className="text-[10px] text-[var(--text-muted)]">
-                                Sources: {msg.sourcesUsed.join(', ')}
-                              </span>
-                            )}
-                          </div>
+                        <div className="mt-2 pt-1.5 border-t border-[var(--border-color)]/60 flex items-center justify-between gap-2 text-[11px] text-[var(--text-muted)]">
+                          <span>Helping Agent</span>
 
                           <div className="flex items-center gap-2 ml-auto">
                             <span>{msg.timestamp}</span>
@@ -479,7 +781,7 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
                     </div>
                     <div className="bg-[var(--surface-secondary)] border border-[var(--border-color)] rounded-2xl rounded-bl-xs px-4 py-3 text-xs text-[var(--text-secondary)] flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full bg-[var(--primary-accent)] animate-ping" />
-                      <span>Synthesizing database records & generating grounded insight via Groq...</span>
+                      <span>Helping Agent is thinking...</span>
                     </div>
                   </div>
                 )}
@@ -521,7 +823,7 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
                     type="text"
                     value={inputPrompt}
                     onChange={e => setInputPrompt(e.target.value)}
-                    placeholder="Ask about deliverables, risks, workloads, or project documents..."
+                    placeholder="Ask Helping Agent anything about your project..."
                     disabled={isLoading}
                     className="flex-1 px-3.5 py-2.5 text-xs text-[var(--text-primary)] bg-[var(--surface-secondary)] border border-[var(--border-color)] rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[var(--primary-accent)]/30 placeholder-[var(--text-muted)]"
                   />
@@ -641,16 +943,16 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
             </div>
           )}
 
-          {/* TAB 3: LangGraph Workflows & Approvals */}
+          {/* TAB 3: Workflows & Approvals */}
           {activeTab === 'workflows' && (
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
               <div>
                 <h4 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1 flex items-center gap-1.5">
                   <Layers className="w-4 h-4 text-[var(--primary-accent)]" />
-                  LangGraph Agent Workflows with Human-in-the-Loop Sign-off
+                  Project Workflows
                 </h4>
                 <p className="text-xs text-[var(--text-secondary)]">
-                  Executes stateful workflows with pause-for-approval boundaries. No project writes occur until you inspect the proposal and explicitly sign off.
+                  Automated workflows for project recovery and task generation with human approval.
                 </p>
               </div>
 
@@ -667,10 +969,10 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
                       <Play className="w-3.5 h-3.5 text-amber-500" />
                       Recovery Planner
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600">Requires Approval</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600">Approval Required</span>
                   </div>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
-                    Diagnose overdue tasks & blockers, calculate workload rebalancing, and formulate an actionable mitigation plan.
+                    Analyze bottlenecks, overdue tasks, and suggest workload rebalancing.
                   </p>
                 </button>
 
@@ -680,10 +982,10 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
                       <Play className="w-3.5 h-3.5 text-blue-500" />
                       Document Planner
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600">Requires Approval</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600">Approval Required</span>
                   </div>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed mb-2.5">
-                    Convert requirements specifications into deliverables, subtasks, story points, and skill-matched assignees.
+                    Generate structured deliverables and estimates from requirements documents.
                   </p>
                   
                   {documents.length > 0 ? (
@@ -811,14 +1113,14 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
                               className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors cursor-pointer flex items-center gap-1 shadow-sm"
                             >
                               <Check className="w-3.5 h-3.5" />
-                              Approve & Execute Mutations
+                              Approve & Apply
                             </button>
                           </div>
                         )}
 
                         {wf.status === 'COMPLETED' && wf.approved_at && (
-                          <div className="mt-2 text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-mono">
-                            <ShieldCheck className="w-3 h-3" /> Approved and verified in database records
+                          <div className="mt-2 text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                            <ShieldCheck className="w-3 h-3" /> Approved and applied to project
                           </div>
                         )}
                       </div>

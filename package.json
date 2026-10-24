@@ -24,6 +24,7 @@
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "jsonrepair": "^3.15.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "pdf-parse": "^2.4.5",

@@ -10,12 +10,14 @@ import {
   Users,
   FolderGit2,
   Trash2,
-  Key,
   User as UserIcon,
-  ShieldCheck
+  ShieldCheck,
+  Check,
+  Clock,
+  Sparkles
 } from 'lucide-react';
 import { api } from '../../api/client';
-import { User, UserGitHubProfile } from '../../types';
+import { User } from '../../types';
 import { Avatar } from '../common/Avatar';
 
 interface MemberGitHubModalProps {
@@ -36,14 +38,15 @@ export const MemberGitHubModal: React.FC<MemberGitHubModalProps> = ({
   const [activeTab, setActiveTab] = useState<'my-account' | 'team-directory'>('my-account');
   const [status, setStatus] = useState<any>(null);
   const [teamStatus, setTeamStatus] = useState<any[]>([]);
+  const [projectGitHubStatus, setProjectGitHubStatus] = useState<any>(null);
   const [repos, setRepos] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Form fields
-  const [patToken, setPatToken] = useState('');
+  // Form fields (Zero PAT prompt)
   const [ghUsername, setGhUsername] = useState(currentUser?.github_username || '');
   const [selectedRepo, setSelectedRepo] = useState('');
 
@@ -57,6 +60,7 @@ export const MemberGitHubModal: React.FC<MemberGitHubModalProps> = ({
       ]);
       setStatus(userStatusRes);
       setTeamStatus(teamStatusRes);
+
       if (userStatusRes.is_connected) {
         if (userStatusRes.github_username) {
           setGhUsername(userStatusRes.github_username);
@@ -64,14 +68,22 @@ export const MemberGitHubModal: React.FC<MemberGitHubModalProps> = ({
         if (userStatusRes.selected_repo) {
           setSelectedRepo(userStatusRes.selected_repo);
         }
-        // Load user repos
         try {
           const repoRes = await api.getUserGitHubRepos();
           if (repoRes && repoRes.repos) {
             setRepos(repoRes.repos);
           }
         } catch {
-          // Ignore repo load error
+          // Non-fatal
+        }
+      }
+
+      if (selectedProjectId) {
+        try {
+          const projStatus = await api.getGitHubStatus(selectedProjectId);
+          setProjectGitHubStatus(projStatus);
+        } catch {
+          // Non-fatal
         }
       }
     } catch (err: any) {
@@ -85,14 +97,61 @@ export const MemberGitHubModal: React.FC<MemberGitHubModalProps> = ({
     if (isOpen) {
       loadStatus();
     }
-  }, [isOpen]);
+  }, [isOpen, selectedProjectId]);
+
+  // Listen for OAuth completion from popup window
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        setSuccessMessage('GitHub account successfully authenticated!');
+        loadStatus();
+        if (onProfileUpdated) onProfileUpdated();
+      } else if (event.data?.type === 'OAUTH_AUTH_ERROR') {
+        setErrorMessage(event.data.message || 'GitHub OAuth failed.');
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onProfileUpdated]);
 
   if (!isOpen) return null;
 
-  const handleConnect = async (e: React.FormEvent) => {
+  const handleOAuthConnect = async () => {
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const res = await api.getGitHubOAuthUrl();
+      if (res.url) {
+        const popup = window.open(res.url, 'github_oauth_popup', 'width=600,height=720');
+        if (!popup) {
+          window.location.href = res.url;
+        }
+      } else {
+        // Fallback: connect using GitHub username via backend credentials
+        if (!ghUsername.trim()) {
+          setErrorMessage('Please enter your GitHub username to connect your account.');
+          setIsSubmitting(false);
+          return;
+        }
+        const connectRes = await api.connectUserGitHub({
+          github_username: ghUsername.trim()
+        });
+        setSuccessMessage(connectRes.message || 'GitHub account linked successfully!');
+        await loadStatus();
+        if (onProfileUpdated) onProfileUpdated();
+      }
+    } catch (err: any) {
+      setErrorMessage(`Failed to initiate GitHub connect: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUsernameConnect = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!patToken.trim() && !ghUsername.trim()) {
-      setErrorMessage('Please provide either a GitHub Personal Access Token or your GitHub username.');
+    if (!ghUsername.trim()) {
+      setErrorMessage('Please enter your GitHub username.');
       return;
     }
 
@@ -102,30 +161,15 @@ export const MemberGitHubModal: React.FC<MemberGitHubModalProps> = ({
 
     try {
       const res = await api.connectUserGitHub({
-        access_token: patToken.trim() || undefined,
-        github_username: ghUsername.trim() || undefined,
+        github_username: ghUsername.trim(),
         selected_repo: selectedRepo.trim() || undefined
       });
-      setSuccessMessage(res.message || 'GitHub successfully connected!');
-      setPatToken('');
+      setSuccessMessage(res.message || 'GitHub account connected!');
       await loadStatus();
       if (onProfileUpdated) onProfileUpdated();
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to connect GitHub account.');
     } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleOAuthConnect = async () => {
-    setIsSubmitting(true);
-    try {
-      const res = await api.getGitHubOAuthUrl();
-      if (res.url) {
-        window.location.href = res.url;
-      }
-    } catch (err: any) {
-      setErrorMessage(`Failed to initiate GitHub OAuth: ${err.message}`);
       setIsSubmitting(false);
     }
   };
@@ -156,7 +200,25 @@ export const MemberGitHubModal: React.FC<MemberGitHubModalProps> = ({
       await loadStatus();
       if (onProfileUpdated) onProfileUpdated();
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to set repository.');
+      setErrorMessage(err.message || 'Failed to select repository.');
+    }
+  };
+
+  const handleManualSync = async () => {
+    if (!selectedProjectId) {
+      setErrorMessage('Please select a project to sync.');
+      return;
+    }
+    setIsSyncing(true);
+    setErrorMessage(null);
+    try {
+      const syncRes = await api.syncGitHub(selectedProjectId);
+      setSuccessMessage(syncRes.message || 'Repository sync completed successfully!');
+      await loadStatus();
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Sync failed.');
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -170,16 +232,16 @@ export const MemberGitHubModal: React.FC<MemberGitHubModalProps> = ({
               <Github className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-base font-bold tracking-tight">Personal GitHub Integration</h2>
+              <h2 className="text-base font-bold tracking-tight">GitHub Integration</h2>
               <p className="text-xs text-slate-400">
-                Each team member connects their own personal GitHub to link real commits & PRs to tasks
+                Connect your GitHub identity, sync repository activity, and index code into project RAG
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
           >
             ✕
           </button>
@@ -190,7 +252,7 @@ export const MemberGitHubModal: React.FC<MemberGitHubModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('my-account')}
-            className={`pb-2.5 border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`pb-2.5 border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'my-account'
                 ? 'border-blue-600 text-blue-700'
                 : 'border-transparent text-slate-500 hover:text-slate-900'
@@ -205,14 +267,14 @@ export const MemberGitHubModal: React.FC<MemberGitHubModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('team-directory')}
-            className={`pb-2.5 border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`pb-2.5 border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'team-directory'
                 ? 'border-blue-600 text-blue-700'
                 : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
             <Users className="w-3.5 h-3.5" />
-            <span>Team Integrations Directory ({teamStatus.filter(t => t.is_connected).length}/{teamStatus.length})</span>
+            <span>Team Directory ({teamStatus.filter(t => t.is_connected).length}/{teamStatus.length})</span>
           </button>
         </div>
 
@@ -237,7 +299,7 @@ export const MemberGitHubModal: React.FC<MemberGitHubModalProps> = ({
               {status?.is_connected ? (
                 <div className="space-y-4">
                   {/* Connected Profile Card */}
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <img
@@ -271,20 +333,26 @@ export const MemberGitHubModal: React.FC<MemberGitHubModalProps> = ({
                       </a>
                     </div>
 
-                    {/* Active Repository Picker */}
+                    {/* Repository Picker */}
                     <div className="pt-3 border-t border-slate-200">
-                      <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                        <FolderGit2 className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Active Repository for Task Linking</span>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <FolderGit2 className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Authorized Repository</span>
+                        </span>
+                        {repos.length > 0 && (
+                          <span className="text-[11px] text-slate-400">{repos.length} available</span>
+                        )}
                       </label>
+
                       <div className="flex gap-2">
                         {repos.length > 0 ? (
                           <select
                             value={selectedRepo || status.selected_repo || ''}
                             onChange={(e) => handleRepoSelect(e.target.value)}
-                            className="flex-1 px-3 py-1.5 text-xs text-slate-900 border border-slate-200 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                            className="flex-1 px-3 py-2 text-xs text-slate-900 border border-slate-200 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                           >
-                            <option value="">Select a repository...</option>
+                            <option value="">Select an authorized repository...</option>
                             {repos.map((r: any) => (
                               <option key={r.id} value={r.full_name}>
                                 {r.full_name} {r.private ? '(Private)' : ''}
@@ -296,31 +364,88 @@ export const MemberGitHubModal: React.FC<MemberGitHubModalProps> = ({
                             type="text"
                             value={selectedRepo}
                             onChange={(e) => setSelectedRepo(e.target.value)}
-                            placeholder="e.g. facebook/react or owner/repo"
-                            className="flex-1 px-3 py-1.5 text-xs text-slate-900 border border-slate-200 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                            placeholder="e.g. owner/repository"
+                            className="flex-1 px-3 py-2 text-xs text-slate-900 border border-slate-200 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                           />
                         )}
+
                         {repos.length === 0 && (
                           <button
                             type="button"
                             onClick={() => handleRepoSelect(selectedRepo)}
-                            className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+                            className="px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg cursor-pointer"
                           >
-                            Save Repo
+                            Set Repo
                           </button>
                         )}
                       </div>
                       <p className="text-[11px] text-slate-400 mt-1">
-                        Commits in this repository mentioning Jira issue keys (e.g. [EQX-101]) will be automatically surfaced.
+                        Commits and pull requests mentioning deliverable keys (e.g. [EQX-101]) will automatically link and update statuses.
                       </p>
                     </div>
+
+                    {/* Sync Status & Last Synced Commit */}
+                    {projectGitHubStatus && projectGitHubStatus.is_configured && (
+                      <div className="pt-3 border-t border-slate-200 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-700">Repository Sync Status:</span>
+                            <span
+                              className={`text-[11px] font-semibold px-2 py-0.5 rounded font-mono ${
+                                projectGitHubStatus.sync_status === 'completed'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : projectGitHubStatus.sync_status === 'syncing'
+                                  ? 'bg-blue-50 text-blue-700 border border-blue-200 animate-pulse'
+                                  : projectGitHubStatus.sync_status === 'failed'
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  : 'bg-slate-100 text-slate-600 border border-slate-200'
+                              }`}
+                            >
+                              {projectGitHubStatus.sync_status} {projectGitHubStatus.sync_stage !== 'idle' ? `(${projectGitHubStatus.sync_stage})` : ''}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleManualSync}
+                            disabled={isSyncing || projectGitHubStatus.sync_status === 'syncing'}
+                            className="px-3 py-1 text-xs font-semibold text-blue-700 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                            <span>{isSyncing ? 'Syncing...' : 'Sync Repository'}</span>
+                          </button>
+                        </div>
+
+                        {projectGitHubStatus.last_synced_sha && (
+                          <div className="p-2.5 bg-white rounded-lg border border-slate-200 text-xs space-y-1">
+                            <div className="flex items-center justify-between text-slate-500 text-[11px]">
+                              <span className="flex items-center gap-1 font-mono">
+                                <GitCommit className="w-3.5 h-3.5 text-slate-400" />
+                                <span>Commit: <strong className="text-slate-800 font-semibold">{projectGitHubStatus.last_synced_sha}</strong></span>
+                              </span>
+                              {projectGitHubStatus.last_synced_at && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  <span>{new Date(projectGitHubStatus.last_synced_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </span>
+                              )}
+                            </div>
+                            {projectGitHubStatus.last_synced_commit_message && (
+                              <p className="text-slate-700 text-xs truncate">
+                                "{projectGitHubStatus.last_synced_commit_message}"
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="pt-2 flex justify-end">
                       <button
                         type="button"
                         onClick={handleDisconnect}
                         disabled={isSubmitting}
-                        className="px-3 py-1.5 text-xs font-medium text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors flex items-center gap-1.5"
+                        className="px-3 py-1.5 text-xs font-medium text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>Disconnect GitHub</span>
@@ -329,87 +454,61 @@ export const MemberGitHubModal: React.FC<MemberGitHubModalProps> = ({
                   </div>
                 </div>
               ) : (
-                /* Connect form */
-                <form onSubmit={handleConnect} className="space-y-4">
+                /* Connect flow (Zero PAT inputs, 1-click connect) */
+                <div className="space-y-4">
                   <div className="p-4 bg-blue-50/60 border border-blue-200 rounded-xl text-xs text-blue-900 leading-relaxed">
                     <div className="font-semibold mb-1 flex items-center gap-1.5">
                       <ShieldCheck className="w-4 h-4 text-blue-600" />
-                      <span>Member-Authoritative Integration</span>
+                      <span>Secure GitHub Authentication</span>
                     </div>
-                    Every member connects their own personal GitHub account. You can connect using your GitHub Personal Access Token (PAT) for private repos & rate-limit immunity, or connect instantly using your public username.
+                    Connect your GitHub account using OAuth or username linking. Minimum read permissions are requested. Tokens are encrypted at rest on the backend and never exposed to the client.
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      GitHub Username
-                    </label>
-                    <input
-                      type="text"
-                      value={ghUsername}
-                      onChange={(e) => setGhUsername(e.target.value)}
-                      placeholder="e.g. torvalds or your-username"
-                      className="w-full px-3 py-2 text-xs text-slate-900 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Your GitHub handle will be mapped to all your assigned tasks and commit signatures.
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <Key className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Personal Access Token (Recommended)</span>
-                      </span>
-                      <a
-                        href="https://github.com/settings/tokens/new?scopes=repo,read:user"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[11px] text-blue-600 hover:underline flex items-center gap-0.5"
-                      >
-                        <span>Generate Token</span>
-                        <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
-                    </label>
-                    <input
-                      type="password"
-                      value={patToken}
-                      onChange={(e) => setPatToken(e.target.value)}
-                      placeholder="ghp_xxxxxxxxxxxxxxxxxxxx (fine-grained or classic token)"
-                      className="w-full px-3 py-2 text-xs font-mono text-slate-900 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Tokens are validated live against api.github.com and stored securely in SQLite for your account.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2.5 pt-2">
+                  <div className="p-5 bg-slate-50 border border-slate-200 rounded-xl space-y-4">
                     <button
                       type="button"
                       onClick={handleOAuthConnect}
                       disabled={isSubmitting}
-                      className="w-full py-2.5 px-4 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl shadow-2xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="w-full py-3 px-4 text-xs font-semibold text-white bg-slate-900 hover:bg-black rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                     >
-                      <Github className="w-4 h-4 text-slate-900" />
-                      <span>Authenticate with GitHub OAuth (1-Click)</span>
+                      <Github className="w-4 h-4" />
+                      <span>{isSubmitting ? 'Connecting...' : 'Connect with GitHub (1-Click)'}</span>
                     </button>
 
-                    <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest my-1">
+                    <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest my-2">
                       <div className="flex-1 border-t border-slate-200"></div>
-                      <span>Or connect via Personal Token / Username</span>
+                      <span>Or link by GitHub Username</span>
                       <div className="flex-1 border-t border-slate-200"></div>
                     </div>
 
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-slate-900 hover:bg-black rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      <Github className="w-4 h-4" />
-                      <span>{isSubmitting ? 'Verifying with GitHub...' : 'Connect Personal GitHub'}</span>
-                    </button>
+                    <form onSubmit={handleUsernameConnect} className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          GitHub Username
+                        </label>
+                        <input
+                          type="text"
+                          value={ghUsername}
+                          onChange={(e) => setGhUsername(e.target.value)}
+                          placeholder="e.g. torvalds or your-handle"
+                          className="w-full px-3 py-2 text-xs text-slate-900 border border-slate-200 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                        />
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          Links public commits and PRs to tasks matching your username.
+                        </p>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={isSubmitting || !ghUsername.trim()}
+                        className="w-full py-2 px-3 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg shadow-2xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <UserIcon className="w-3.5 h-3.5" />
+                        <span>Link Username Profile</span>
+                      </button>
+                    </form>
                   </div>
-                </form>
+                </div>
               )}
             </>
           )}
@@ -430,33 +529,36 @@ export const MemberGitHubModal: React.FC<MemberGitHubModalProps> = ({
                         size="md"
                       />
                       <div className="min-w-0">
-                        <div className="text-xs font-semibold text-slate-900 truncate flex items-center gap-1.5">
-                          <span>{m.name}</span>
-                          {currentUser?.email === m.email && (
-                            <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded font-mono">You</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-slate-800 truncate">{m.name}</span>
+                          <span className="text-[11px] text-slate-400 font-mono">({m.role})</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+                          {m.github_username ? (
+                            <span className="font-mono text-blue-600 flex items-center gap-1">
+                              <Github className="w-3 h-3 text-slate-400" />
+                              <span>@{m.github_username}</span>
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 italic">No GitHub handle linked</span>
                           )}
                         </div>
-                        <div className="text-[11px] text-slate-400 truncate font-mono">
-                          {m.email} · {m.role}
-                        </div>
-                        {m.is_connected && (
-                          <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5 font-mono">
-                            <span>{m.commits_count || 0} commits</span>
-                            <span>·</span>
-                            <span>{m.prs_count || 0} PRs</span>
-                          </div>
-                        )}
                       </div>
                     </div>
 
-                    <div className="text-right shrink-0">
+                    <div className="flex items-center gap-3 shrink-0">
                       {m.is_connected ? (
-                        <div className="flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[11px] font-medium border border-emerald-200">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          <span>@{m.github_username}</span>
+                        <div className="text-right">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            <Check className="w-3 h-3" />
+                            Connected
+                          </span>
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                            {m.commits_count || 0} commits · {m.prs_count || 0} PRs
+                          </div>
                         </div>
                       ) : (
-                        <span className="text-[11px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                        <span className="text-[11px] font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
                           Unlinked
                         </span>
                       )}
@@ -469,15 +571,15 @@ export const MemberGitHubModal: React.FC<MemberGitHubModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
-          <div className="flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-            <span>Independent per-member credentials</span>
+        <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+          <div className="flex items-center gap-1 text-slate-400 text-[11px]">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Read-only GitHub permissions enforced</span>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
+            className="px-4 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
           >
             Close
           </button>

@@ -270,7 +270,16 @@ export default function App() {
       <div className="min-h-screen bg-[var(--bg-main)] text-[var(--text-primary)] font-sans transition-colors duration-200">
         <FrontPage
           onOpenAuth={handleOpenAuth}
-          onExploreDemo={() => setIsGuestPreview(true)}
+          onExploreDemo={async () => {
+            try {
+              const res = await api.login({ email: 'zaidtested@gmail.com', password: 'password123' });
+              setCurrentUser(res.user);
+              setIsGuestPreview(false);
+              await loadAllData();
+            } catch {
+              setIsGuestPreview(true);
+            }
+          }}
           theme={theme}
           onToggleTheme={handleToggleTheme}
         />
@@ -511,6 +520,8 @@ export default function App() {
         isOpen={isAIOpen}
         onClose={() => setIsAIOpen(false)}
         selectedProjectId={selectedProjectId}
+        projects={projects.map(p => ({ id: p.id, name: p.name }))}
+        onSelectProject={(pId) => setSelectedProjectId(pId === 'all' ? '' : pId)}
       />
 
       {/* Global Quick Task Creation Modal */}

@@ -199,6 +199,17 @@ export async function syncProjectRepositoryActivity(
         extractedKey = match[0].toUpperCase();
       }
 
+      // Check PR reviews for approval status
+      let reviewState: string | null = null;
+      try {
+        const revRes = await callGitHubApi<any[]>(`/repos/${cleanOwner}/${cleanRepo}/pulls/${prNumber}/reviews`, { token });
+        if (revRes.data && Array.isArray(revRes.data) && revRes.data.length > 0) {
+          if (revRes.data.some((r: any) => r.state === 'APPROVED')) reviewState = 'APPROVED';
+          else if (revRes.data.some((r: any) => r.state === 'CHANGES_REQUESTED')) reviewState = 'CHANGES_REQUESTED';
+          else reviewState = 'COMMENTED';
+        }
+      } catch {}
+
       db.execute(
         `INSERT INTO github_pull_requests (id, project_id, repo_full_name, number, title, state, author_login, created_at, merged_at, url, issue_key)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -221,7 +232,8 @@ export async function syncProjectRepositoryActivity(
         created_at: createdAt,
         merged_at: mergedAt,
         url,
-        issue_key: extractedKey
+        issue_key: extractedKey,
+        review_state: reviewState
       });
     }
 
@@ -312,6 +324,19 @@ export async function syncProjectRepositoryActivity(
 
     for (const f of filesToIndex) {
       try {
+        // Incremental optimization: if file sha is unchanged, skip re-downloading and re-embedding
+        if (options.isIncremental) {
+          const existingFile = db.queryOne<{ sha: string; indexed_chunk_count: number }>(
+            'SELECT sha, indexed_chunk_count FROM github_files WHERE project_id = ? AND repo_full_name = ? AND path = ?',
+            [projectId, repoFullName, f.path]
+          );
+          if (existingFile && existingFile.sha === f.sha && existingFile.indexed_chunk_count > 0) {
+            indexedFilesCount++;
+            indexedChunksCount += existingFile.indexed_chunk_count;
+            continue;
+          }
+        }
+
         const fileContentRes = await callGitHubApi<any>(
           `/repos/${cleanOwner}/${cleanRepo}/contents/${encodeURIComponent(f.path)}?ref=${defaultBranch}`,
           { token }

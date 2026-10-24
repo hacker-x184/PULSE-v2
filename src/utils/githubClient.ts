@@ -104,6 +104,9 @@ export async function callGitHubApi<T = any>(
     const rateLimitReset = res.headers.get('x-ratelimit-reset')
       ? parseInt(res.headers.get('x-ratelimit-reset')!, 10)
       : null;
+    const retryAfter = res.headers.get('retry-after')
+      ? parseInt(res.headers.get('retry-after')!, 10)
+      : null;
 
     if (res.status === 304) {
       return {
@@ -114,6 +117,11 @@ export async function callGitHubApi<T = any>(
         rateLimitRemaining,
         rateLimitReset
       };
+    }
+
+    if (res.status === 429 || (res.status === 403 && rateLimitRemaining === 0)) {
+      const waitSeconds = retryAfter || (rateLimitReset ? Math.max(0, rateLimitReset - Math.floor(Date.now() / 1000)) : 60);
+      throw new Error(`GitHub rate limit exceeded. Reset in ${waitSeconds}s.`);
     }
 
     if (!res.ok) {
